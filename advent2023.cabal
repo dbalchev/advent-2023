@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               aoc2023
+name:               advent2023
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -34,14 +34,14 @@ common requires
         vector-algorithms ^>= 0.9.0.1,
         parsec ^>= 3.1.17.0,
     
-library aoc2023-lib
+library advent2023-lib
     import: requires
     hs-source-dirs:   app
     exposed-modules: 
         Day01
 
 
-executable aoc2023
+executable advent2023
     import: requires
     main-is:          Main.hs
 
@@ -52,7 +52,7 @@ executable aoc2023
     -- other-extensions:
     hs-source-dirs:   app
     build-depends:
-        aoc2023-lib
+        advent2023-lib
     default-language: Haskell2010
     other-modules:
         Day01
@@ -63,7 +63,7 @@ test-suite tests
     type:                exitcode-stdio-1.0
     hs-source-dirs:      tests
     build-depends:
-        aoc2023-lib,
+        advent2023-lib,
         HUnit ^>= 1.6.2.0,
     main-is:             Suite.hs
     default-language: Haskell2010
