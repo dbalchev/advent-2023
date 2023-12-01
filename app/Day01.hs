@@ -2,14 +2,14 @@
 
 module Day01 where
 
-import qualified Control.Exception     as CE
+import qualified Control.Exception as CE
+import           Control.Monad     (guard)
+import           Data.Char         (isDigit)
 import qualified Data.List
-import           Data.Char             (isDigit)
-import           Data.Maybe            (isJust)
-import qualified Data.Text.Lazy        as LT
-import qualified Data.Text.Lazy.IO     as LTIO
-import qualified Data.Vector           as DV
-import Control.Monad (guard)
+import           Data.Maybe        (isJust)
+import qualified Data.Text.Lazy    as LT
+import qualified Data.Text.Lazy.IO as LTIO
+import qualified Data.Vector       as DV
 
 parseLine1 :: LT.Text -> Int
 parseLine1 line = read [firstDigit, lastDigit]
@@ -45,7 +45,7 @@ parseToken2 suffix = fst <$> Data.List.uncons matches
 -- Just 3
 
 suffixes :: LT.Text -> [LT.Text]
-suffixes text = maybe [] (\(_, suffix) -> text: suffixes suffix) $ LT.uncons text
+suffixes text = maybe [] (\(_, suffix) -> text : suffixes suffix) $ LT.uncons text
 -- >>> suffixes $ LT.pack "foobar"
 -- ["foobar","oobar","obar","bar","ar","r"]
 
