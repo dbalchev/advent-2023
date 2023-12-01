@@ -45,7 +45,7 @@ parseToken2 suffix = fst <$> Data.List.uncons matches
 -- Just 3
 
 suffixes :: LT.Text -> [LT.Text]
-suffixes text = maybe [] (\(_, suffix) -> text : suffixes suffix) $ LT.uncons text
+suffixes text = maybe [] ((text :) . suffixes . snd) $ LT.uncons text
 -- >>> suffixes $ LT.pack "foobar"
 -- ["foobar","oobar","obar","bar","ar","r"]
 
