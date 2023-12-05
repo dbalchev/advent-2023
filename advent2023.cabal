@@ -40,10 +40,12 @@ library advent2023-lib
     import: requires
     hs-source-dirs:   app
     exposed-modules: 
+        AocParser,
         Day01,
         Day02,
         Day03,
         Day04,
+        Day05,
 
 
 executable advent2023
