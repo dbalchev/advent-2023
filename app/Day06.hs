@@ -1,14 +1,11 @@
 module Day06 where
 
-import           Control.Monad (when)
+import           Control.Monad (when, zipWithM)
 import qualified Data.Text     as T
 import qualified Data.Text.IO  as T
 import           Data.Vector   (Vector)
 import qualified Data.Vector   as DV
 import           GHC.Float     (int2Double)
-
-pairTwo :: [[Int]] -> [(Int, Int)]
-pairTwo (a:b:_) = zip a b
 
 solveOne time recordDistance = do
     -- t * (time - t) > recordDistance
@@ -40,10 +37,11 @@ solveOne time recordDistance = do
 
 solve inputFilename = do
     inputString <- T.readFile inputFilename
-    let input1 = DV.fromList . pairTwo . (((read . T.unpack) <$>) . drop 1 <$> T.words <$>) . T.lines $ inputString
-    let solution1 = (fmap product . traverse (uncurry solveOne) . DV.toList) input1
-    let input2 = head . pairTwo . map (:[]) . (read . concatMap T.unpack . drop 1 <$> T.words <$>) . T.lines $ inputString
-    let solution2 = uncurry solveOne input2
+    let (times:distances:_) = (((read . T.unpack) <$>) . drop 1 <$> T.words <$>) . T.lines $ inputString
+    let solution1 = product <$> zipWithM solveOne times distances
+    let time2 = read $ concatMap show times
+    let distance2 = read $ concatMap show distances
+    let solution2 = solveOne time2 distance2
     return (solution1, solution2)
 
 
