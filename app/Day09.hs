@@ -1,13 +1,13 @@
 module Day09 where
 
-import qualified Data.Vector as V
-import qualified Data.Text as T
+import qualified Data.Text    as T
 import qualified Data.Text.IO as T
+import qualified Data.Vector  as V
 
 extrapolate ::  V.Vector Int -> (Int, Int)
 extrapolate values
     | all (== 0) values = (0, 0)
-    | otherwise         = (V.head values - edStart, V.last values + edEnd) 
+    | otherwise         = (V.head values - edStart, V.last values + edEnd)
     where
         deltas = V.zipWith (-) (V.tail values) values
         (edStart, edEnd) = extrapolate deltas
