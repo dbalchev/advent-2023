@@ -34,18 +34,19 @@ seek 'R' = snd
 
 findCycles transitionMap instructions isFinal startingState  = do
     instructionXstateToStep <- HT.new
-    let step i currentState finalStates = do
-        let instructionIndex = i `mod` T.length instructions
-        let key = (instructionIndex, currentState)
-        let unfinishedStep = do
-            HT.insert instructionXstateToStep key i
-            nextState <- (seek . T.index instructions $  instructionIndex) . fromJust <$> HT.lookup transitionMap currentState
-            let currentFinalStates = ([i | isFinal currentState])
-            step (i + 1) nextState (finalStates ++ currentFinalStates)
-        let finishedStep prevIndex = return (prevIndex, i, finalStates)
-        lookupResult <- HT.lookup instructionXstateToStep key
-        maybe unfinishedStep finishedStep lookupResult
-    step 0 startingState []
+    (`runContT` return) $ callCC $ \exit -> do
+        (`runStateT` (startingState, [])) $ do
+            forM_ [0..] $ \i -> do
+                (currentState, finalStates) <- get
+                let instructionIndex = i `mod` T.length instructions
+                let key = (instructionIndex, currentState)
+                lookupResult <- lift . lift  $ HT.lookup instructionXstateToStep key
+                maybe (return ()) (\prevIndex -> lift $ exit (prevIndex, i, finalStates)) lookupResult
+                lift . lift $ HT.insert instructionXstateToStep key i
+                let currentFinalStates = ([i | isFinal currentState])
+                nextState <- lift . lift $ (seek . T.index instructions $  instructionIndex) . fromJust <$> HT.lookup transitionMap currentState
+                put (nextState, finalStates ++ currentFinalStates)
+        return (-1, -1, [])
 
 endsWith c = (== c) . snd . fromJust . T.unsnoc
 
@@ -68,14 +69,14 @@ solve inputFilename = do
         let nextStates = map nextState repInstructions
         hasAAA <- isJust <$> HT.lookup ht "AAA"
         hasZZZ <- isJust <$> HT.lookup ht "ZZZ"
-        let walk = (`runContT` id) $ callCC $ \exit -> do
+        let walk = (`runContT` return) $ callCC $ \exit -> do
             (`runStateT` (0 :: Int, "AAA")) $ do
                 forM_ nextStates $ \next -> do
                     (oldCount, oldState) <- get
-                    when (oldState == "ZZZ") (lift $ exit $ return oldCount)
+                    when (oldState == "ZZZ") (lift $ exit oldCount)
                     newState <- lift . lift $ next oldState
                     put (oldCount + 1, newState)
-            return $ return $ -1
+            return $ -1
         solution1 <- if hasAAA && hasZZZ then walk else return $ -1
         let beginningStates = V.fromList $ filter (endsWith 'A') . map fst $ parsedInput
         cycleInfo <- mapM (findCycles ht instructions (endsWith 'Z')) beginningStates
