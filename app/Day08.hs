@@ -12,6 +12,9 @@ import qualified Data.Vector.Mutable     as VM
 import           Text.Parsec             (digit, letter, many, parse, string,
                                           (<|>))
 import           Text.Parsec.Text        (Parser)
+import Control.Monad.Trans.Cont (callCC, ContT (runContT))
+import Control.Monad.Trans.State (StateT (runStateT), get, put)
+import Control.Monad.Trans.Class (MonadTrans(lift))
 
 lineParser :: Parser (T.Text, (T.Text, T.Text))
 lineParser = do
@@ -28,15 +31,6 @@ lineParser = do
 
 seek 'L' = fst
 seek 'R' = snd
-
-
-
-walk current (h:t) isEnd c = do
-    let rw = do
-        nextH <- h current
-        rest <- walk nextH t isEnd (c - 1)
-        return $ 1 + rest
-    if isEnd current || c == 0 then return 0 else rw
 
 findCycles transitionMap instructions isFinal startingState  = do
     instructionXstateToStep <- HT.new
@@ -74,7 +68,15 @@ solve inputFilename = do
         let nextStates = map nextState repInstructions
         hasAAA <- isJust <$> HT.lookup ht "AAA"
         hasZZZ <- isJust <$> HT.lookup ht "ZZZ"
-        solution1 <- if hasAAA && hasZZZ then walk "AAA" nextStates (=="ZZZ") limit else return $ -1
+        let walk = (`runContT` id) $ callCC $ \exit -> do
+            (`runStateT` (0 :: Int, "AAA")) $ do
+                forM_ nextStates $ \next -> do
+                    (oldCount, oldState) <- get
+                    when (oldState == "ZZZ") (lift $ exit $ return oldCount)
+                    newState <- lift . lift $ next oldState
+                    put (oldCount + 1, newState)
+            return $ return $ -1
+        solution1 <- if hasAAA && hasZZZ then walk else return $ -1
         let beginningStates = V.fromList $ filter (endsWith 'A') . map fst $ parsedInput
         cycleInfo <- mapM (findCycles ht instructions (endsWith 'Z')) beginningStates
         let requirements = computeChineseTheoremRequirements cycleInfo
