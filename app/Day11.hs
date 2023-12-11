@@ -17,21 +17,30 @@ pairs list = do
 -- >>> pairs "abcd"
 -- [('a','b'),('a','c'),('a','d'),('b','c'),('b','d'),('c','d')]
 
-dOfIsEmpty :: Bool -> Int
-dOfIsEmpty False = 2
-dOfIsEmpty True  = 1
+boolToInt :: Bool -> Int
+boolToInt False = 0
+boolToInt True = 1
 
-distanceAxis isEmpty start end
-    = sum $ (\i -> dOfIsEmpty $ isEmpty V.! i) <$> [a+1..b-1]
-        where [a, b] = sort [start, end]
-
-expand isEmpty axisMap = do
-    (i, c) <- zip [0..] axisMap
-    if isEmpty V.! i then [c, c] else [c]
-
-expandTest = expand (V.fromList [False, True, False, True]) "abcd"
--- >>> expandTest
--- "abbcd"
+solveOnce expansionFactor charMap = sum distances
+    where
+        nRows = V.length charMap
+        nCols = V.length $ V.head charMap
+        rows = [0..nRows-1]
+        cols = [0..nCols-1]
+        isEmptyRow = V.fromList $ do
+            i <- rows
+            return $ all (== '.') [charMap V.! i V.! j | j <- cols]
+        isEmptyCol = V.fromList $ do
+            j <- cols
+            return $ all (== '.') [charMap V.! i V.! j | i <- rows]
+        emptyRowsUntil = V.scanl1 (+) $ boolToInt <$> isEmptyRow
+        emptyColsUntil = V.scanl1 (+) $ boolToInt <$> isEmptyCol
+        galaxyCoordinates = [
+                                (i + expansionFactor * (emptyRowsUntil V.! i), j +  expansionFactor * (emptyColsUntil V.! j))
+                                |i <- rows, j <- cols, charMap V.! i V.! j == '#'
+                            ]
+        distance (a, b) (c, d) = abs (a - c) + abs (b - d)
+        distances = map (uncurry distance) (pairs galaxyCoordinates)
 
 solve inputFilename = do
     charMap <- readCharMap inputFilename
@@ -46,26 +55,12 @@ solve inputFilename = do
         j <- cols
         return $ all (== '.') [charMap V.! i V.! j | i <- rows]
 
-    let expandedMap = V.fromList . expand isEmptyRow . map (V.fromList . expand isEmptyCol . V.toList) . V.toList $ charMap
-    let nRows = V.length expandedMap
-    let nCols = V.length $ V.head expandedMap
-    let rows = [0..nRows-1]
-    let cols = [0..nCols-1]
-    let galaxyCoordinates = [(i, j)|i <- rows, j <- cols, expandedMap V.! i V.! j == '#']
-    let distance (a, b) (c, d) = abs (a - c) + abs (b - d)
-    --      = let
-    --         acDir = if a < c then 1 else -1
-    --         bdDir = if b < d then 1 else -1
-    --         correctionAB = minimum $ map dOfIsEmpty [isEmptyRow V.! (a + acDir), isEmptyCol V.! (b + bdDir)]
-    --         correctionBD = minimum $ map dOfIsEmpty [isEmptyRow V.! (c - acDir), isEmptyCol V.! (d - bdDir)]
-    --         delta = if a == c || b == d then 0 else correctionAB + correctionBD
-    --      in distanceAxis isEmptyRow a c + distanceAxis isEmptyCol b d + delta
-    let distances = map (uncurry distance) (pairs galaxyCoordinates)
-    let solution1 = sum distances
-    return $ solution1
+    let solution1 = solveOnce 1 charMap
+    let solution2 = solveOnce (1000000 - 1) charMap
+    return (solution1, solution2)
 
 -- >>> solve "inputs/sample/11.txt"
--- 374
+-- (374,82000210)
 
 -- >>> solve "inputs/real/11.txt"
--- 10494813
+-- (10494813,840988812853)
