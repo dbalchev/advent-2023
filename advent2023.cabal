@@ -52,6 +52,7 @@ library advent2023-lib
         Day08,
         Day09,
         Day10,
+        Day11,
 
 
 executable advent2023

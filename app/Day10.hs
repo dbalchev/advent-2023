@@ -13,6 +13,7 @@ import qualified Data.Text                 as T
 import qualified Data.Text.IO              as T
 import qualified Data.Vector               as V
 import           GHC.ST                    (ST (ST))
+import AocParser (readCharMap)
 
 
 connections :: V.Vector (V.Vector Char) -> Int -> Int -> [(Int, Int)]
@@ -66,7 +67,7 @@ isInside insideString trueSType = T.length (r remapped) `mod` 2 == 1
 -- False
 
 solve inputFile = do
-    rawInput <- V.fromList . (V.fromList . T.unpack <$>) . T.lines <$> T.readFile inputFile
+    rawInput <- readCharMap inputFile
     let nRows = V.length rawInput
     let nCols = V.length $ V.head rawInput
     let result = runST $ do
