@@ -7,6 +7,7 @@ import qualified Data.Vector  as V
 
 import qualified Data.HashTable.ST.Basic as HT
 import Control.Monad.ST (runST)
+import Data.List (intersperse, intercalate)
 
 parseLine :: T.Text -> (V.Vector Char, V.Vector Int)
 parseLine line = (V.fromList . T.unpack $ brokenMap, brokenGroupSizes)
@@ -44,17 +45,29 @@ solve1 brokenMap brokenGroupSizes
                 | currentChar == '?' = (+) <$> pureGo rGo state '.' <*> pureGo rGo state '#'
 
 
--- solve2 brokenMap brokenGroupSizes = solve1 rbm rbgs
---     where
---         repeat5 = V.fromList . repeat
+repeat5 v = V.concatMap (const v) (V.replicate 5 ())
+
+-- >>> repeat5 . V.fromList $ [1, 2, 3]
+-- [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
+
+repeat5sep = V.fromList . intercalate "?" . replicate 5 . V.toList
+
+-- >>> repeat5sep $ V.fromList ".#"
+-- ".#?.#?.#?.#?.#"
+
+solve2 brokenMap brokenGroupSizes = solve1 rbm rbgs
+    where
+        rbm = repeat5sep brokenMap
+        rbgs = repeat5 brokenGroupSizes
 
 solve inputFilename = do
     input <- (parseLine <$>) . T.lines <$> T.readFile inputFilename
     let solution1 = sum $ uncurry solve1 <$> input
-    return solution1
+    let solution2 = sum $ uncurry solve2 <$> input
+    return (solution1, solution2)
 
 -- >>> solve "inputs/sample/12.txt"
--- 21
+-- (21,525152)
 
 -- >>> solve "inputs/real/12.txt"
--- 7251
+-- (7251,2128386729962)
