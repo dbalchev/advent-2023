@@ -1,9 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Day12 where
 
 import qualified Data.Text    as T
 import qualified Data.Text.IO as T
 import qualified Data.Vector  as V
+
+import qualified Data.Array.MArray as MA
 
 import qualified Data.HashTable.ST.Basic as HT
 import Control.Monad.ST (runST)
@@ -25,6 +28,17 @@ htFix f = do
             return result
         maybe computeAndSave return memoed
     return g
+
+-- arrayFix f bounds = do
+--     memo <- MA.newArray bounds Nothing
+--     let g arg = do
+--         memoed <- MA.readArray memo arg
+--         let computeAndSave = do
+--             result <- f g arg
+--             MA.writeArray memo arg (Just result)
+--             return result
+--         maybe computeAndSave return memoed
+--     return g
 
 solve1 brokenMap brokenGroupSizes
     = runST $ do
