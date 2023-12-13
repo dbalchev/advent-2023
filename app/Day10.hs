@@ -1,19 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Day10 where
 
-import           Control.Monad             (filterM, forM_, forever, when)
-import           Control.Monad.ST          (runST)
-import           Control.Monad.Trans.Class (MonadTrans (lift))
-import           Control.Monad.Trans.Cont  (ContT (runContT), callCC)
-import           Control.Monad.Trans.State (StateT (runStateT), get, put)
-import qualified Data.HashTable.Class      as HTC
-import qualified Data.HashTable.ST.Basic   as HT
-import           Data.Maybe                (isNothing, isJust)
-import qualified Data.Text                 as T
-import qualified Data.Text.IO              as T
-import qualified Data.Vector               as V
-import           GHC.ST                    (ST (ST))
-import AocParser (readCharMap)
+import           AocParser                  (readCharMap)
+import           Control.Monad              (filterM, forM_, forever, when)
+import           Control.Monad.ST           (runST)
+import           Control.Monad.Trans.Class  (MonadTrans (lift))
+import           Control.Monad.Trans.Except (runExceptT, throwE)
+import qualified Data.HashTable.Class       as HTC
+import qualified Data.HashTable.ST.Basic    as HT
+import           Data.Maybe                 (isJust, isNothing)
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
+import qualified Data.Vector                as V
+import           GHC.ST                     (ST (ST))
 
 
 connections :: V.Vector (V.Vector Char) -> Int -> Int -> [(Int, Int)]
@@ -77,17 +76,14 @@ solve inputFile = do
         let explore (i, j) = do
             let nextSteps = connections rawInput i j
             filterM ((isNothing <$>) <$> HT.lookup visitedStep) nextSteps
-        (`runContT` return) $ callCC $ \break -> do
-            (`runStateT` ([], [(startI, startJ)])) $ forever $ do
-                (stack, queue) <- get
-                when (null stack && null queue) $ lift $ break ()
-                when (null queue) $ put ([], reverse stack)
-                (stack, current:rest) <- get
-                Just currentStep <- lift . lift $ HT.lookup visitedStep current
-                nextStates <- lift . lift $ explore current
-                lift . lift $ forM_  nextStates (flip (HT.insert visitedStep) (currentStep + 1))
-                put (nextStates ++ stack, rest)
-            return ()
+        let explorationStep (stack, queue) = do
+            when (null stack && null queue) $ throwE ()
+            let (updatedStack, current:rest) = if null queue then ([], reverse stack) else (stack, queue)
+            Just currentStep <- lift $ HT.lookup visitedStep current
+            nextStates <- lift $ explore current
+            lift $ forM_  nextStates (flip (HT.insert visitedStep) (currentStep + 1))
+            explorationStep (nextStates ++ updatedStack, rest)
+        runExceptT $ explorationStep ([], [(startI, startJ)])
         let [trueSType] = fst <$> filter ((== connections rawInput startI startJ) . snd) [(l, metaConnection rawInput startI startJ l)| l <- "LJ7F|-"]
         maxStep <- maximum . (snd <$>) <$> HTC.toList visitedStep
         let insideString i j = (fst <$>) <$> filterM ((isJust <$>) .  HT.lookup visitedStep . snd)  [(rawInput V.! i V.! k, (i, k)) |k <- [0..j - 1]]
