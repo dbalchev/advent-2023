@@ -5,6 +5,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 import Data.List (transpose, uncons)
+import Data.Either (isRight)
 
 parseToVector = V.fromList . (V.fromList . T.unpack <$>) . T.lines
 
@@ -15,22 +16,38 @@ hasHorizontalMirrorAt terrainMap i = V.and $ V.zipWith (==) mirroredNorthPart so
 
 vTranspose = V.fromList . (V.fromList <$>) . transpose . (V.toList <$>) . V.toList
 
-solve1 terrainMap = do
-    let rows = [1..(V.length terrainMap - 1)]
-    maybe (Right ()) (Left . (100 *) . fst) $ uncons . filter (hasHorizontalMirrorAt terrainMap) $ rows
-    let transposed = vTranspose terrainMap
-    let cols = [1..(V.length transposed - 1)]
-    maybe (Right ()) (Left . fst) $ uncons . filter (hasHorizontalMirrorAt transposed) $ cols
-    return ()
+solve1 terrainMap =  rowScores ++ colScores
+    where
+        rows = [1..(V.length terrainMap - 1)]
+        transposed = vTranspose terrainMap
+        cols = [1..(V.length transposed - 1)]
+        rowScores = ((100 *) <$>) . filter (hasHorizontalMirrorAt terrainMap) $ rows
+        colScores = filter (hasHorizontalMirrorAt transposed) cols
+
+
+fixPixel '.' = '#'
+fixPixel '#' = '.'
+
+fixTerrainMap terrainMap i j = terrainMap V.// [(i,rowToFix V.// [(j, fixPixel (rowToFix V.! j))])]
+    where
+        rowToFix = terrainMap V.! i
+
+solve2 terrainMap = concatMap (filter (/=originalSolution) . solve1 . uncurry (fixTerrainMap terrainMap)) pixels
+    where
+        originalSolution = head $ solve1 terrainMap
+        pixels = (,) <$> [0..(V.length terrainMap - 1)] <*> [0..(V.length (V.head terrainMap) - 1)]
+
 
 solve inputFilename = do
     input <- V.fromList . (parseToVector<$>) . T.splitOn "\n\n" <$> T.readFile inputFilename
-    let solution1 = (sum <$>) . traverse (either Right Left . solve1) $ V.toList input
-    return solution1
+    let solution1 = (sum <$>) . traverse (maybe (Left ()) (Right . fst) . uncons . solve1) $ V.toList input
+    let solution2 = (sum <$>) . traverse (maybe (Left ()) (Right . fst) . uncons . solve2) $ V.toList input
+
+    return (solution1, solution2)
 
 -- >>> solve "inputs/sample/13.txt"
--- Right 405
+-- (Right 405,Right 400)
 
 -- >>> solve "inputs/real/13.txt"
--- Right 33975
+-- (Right 33975,Right 29083)
 
