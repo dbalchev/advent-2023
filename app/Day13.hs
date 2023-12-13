@@ -32,9 +32,9 @@ fixTerrainMap terrainMap i j = terrainMap V.// [(i,rowToFix V.// [(j, fixPixel (
     where
         rowToFix = terrainMap V.! i
 
-solve2 terrainMap = concatMap (filter (/=originalSolution) . solve1 . uncurry (fixTerrainMap terrainMap)) pixels
+solve2 terrainMap = concatMap (filter (not . (`elem` originalSolutions)) . solve1 . uncurry (fixTerrainMap terrainMap)) pixels
     where
-        originalSolution = head $ solve1 terrainMap
+        originalSolutions = solve1 terrainMap
         pixels = (,) <$> [0..(V.length terrainMap - 1)] <*> [0..(V.length (V.head terrainMap) - 1)]
 
 
