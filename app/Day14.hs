@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 module Day14 where
 import           AocParser                  (readCharMap)
-import           Control.Monad              (when, (<=<), (>=>))
+import           Control.Monad              (when, (>=>))
 import           Control.Monad.ST           (runST)
 import           Control.Monad.Trans.Class  (MonadTrans (lift))
 import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
@@ -48,7 +48,7 @@ solve inputFilename = do
     let targetStep = 1000000000
     let solution2 = runST $ do
         stateToStep <- HT.new
-        Left (cycleStart, cycleEnd, stateCache) <- runExceptT $ (flip $ fix . (>=>)) (0, rockMap, []) $
+        Left (cycleStart, cycleEnd, stateCache) <- runExceptT . (flip $ fix . (>=>)) (0, rockMap, []) $
              \(stepNo,currentState, oldStateCache) -> do
                 let key = toHashable currentState
                 let stateCache = currentState : oldStateCache
