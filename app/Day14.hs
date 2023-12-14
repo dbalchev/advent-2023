@@ -1,17 +1,18 @@
 {-# LANGUAGE TupleSections #-}
 module Day14 where
-import           AocParser   (readCharMap)
-import qualified Data.Vector as V
-import           Utils       (vTranspose)
-import Data.List (groupBy, sort, sortOn)
-import Data.Ord (Down(Down))
-import Data.Bool (bool)
-import Control.Monad.ST (runST)
-import qualified Data.HashTable.ST.Basic as HT
-import Control.Monad.Trans.Except (throwE, runExceptT)
-import Control.Monad.Trans.Class (MonadTrans(lift))
-import Control.Monad (when)
-import Data.Hashable (Hashable, hashWithSalt)
+import           AocParser                  (readCharMap)
+import           Control.Monad              (when, (<=<), (>=>))
+import           Control.Monad.ST           (runST)
+import           Control.Monad.Trans.Class  (MonadTrans (lift))
+import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import           Data.Bool                  (bool)
+import           Data.Hashable              (Hashable, hashWithSalt)
+import qualified Data.HashTable.ST.Basic    as HT
+import           Data.List                  (groupBy, sort, sortOn)
+import           Data.Ord                   (Down (Down))
+import qualified Data.Vector                as V
+import           Utils                      (vTranspose)
+import Data.Function (fix)
 
 
 genericFall g = V.fromList . concatMap (sortOn g)  . groupBy (\a b -> a /= '#' && b /= '#') . V.toList
@@ -44,18 +45,18 @@ solve inputFilename = do
     let solution1 = northBeamScore rockMap
     let after1 = spinCycle rockMap
     let limit = 1000
-    let targetStep = 1000000000 
+    let targetStep = 1000000000
     let solution2 = runST $ do
         stateToStep <- HT.new
-        let oneStep stepNo currentState oldStateCache = do
-            let key = toHashable currentState
-            let stateCache = currentState : oldStateCache
-            lookupResult <- lift $ HT.lookup stateToStep key
-            maybe (return ()) (throwE . (,stepNo, stateCache)) lookupResult
-            when (stepNo >= limit) $ throwE (-1, -1, [])
-            lift $ HT.insert stateToStep key stepNo
-            oneStep (stepNo + 1) (spinCycle currentState) stateCache
-        Left (cycleStart, cycleEnd, stateCache) <- runExceptT $ oneStep 0 rockMap []
+        Left (cycleStart, cycleEnd, stateCache) <- runExceptT $ (flip $ fix . (>=>)) (0, rockMap, []) $
+             \(stepNo,currentState, oldStateCache) -> do
+                let key = toHashable currentState
+                let stateCache = currentState : oldStateCache
+                lookupResult <- lift $ HT.lookup stateToStep key
+                maybe (return ()) (throwE . (,stepNo, stateCache)) lookupResult
+                when (stepNo >= limit) $ throwE (-1, -1, [])
+                lift $ HT.insert stateToStep key stepNo
+                return (stepNo + 1, spinCycle currentState, stateCache)
         let cycleLen = cycleEnd - cycleStart
         let stateVector = V.reverse . V.fromList $ stateCache
         let targetStepSimple = cycleStart + (targetStep - cycleStart) `mod` cycleLen
