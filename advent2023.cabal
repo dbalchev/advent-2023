@@ -37,6 +37,7 @@ common requires
         bytestring ^>= 0.12.0.2,
         hashtables ^>= 1.3.1,
         array ^>= 0.5.4.0,
+        hashable ^>= 1.4.3.0,
     
 library advent2023-lib
     import: requires

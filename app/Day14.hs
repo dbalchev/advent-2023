@@ -11,6 +11,7 @@ import qualified Data.HashTable.ST.Basic as HT
 import Control.Monad.Trans.Except (throwE, runExceptT)
 import Control.Monad.Trans.Class (MonadTrans(lift))
 import Control.Monad (when)
+import Data.Hashable (Hashable, hashWithSalt)
 
 
 genericFall g = V.fromList . concatMap (sortOn g)  . groupBy (\a b -> a /= '#' && b /= '#') . V.toList
@@ -28,7 +29,13 @@ tiltEast  = fmap fallRight
 
 spinCycle = tiltEast . tiltSouth . tiltWest .tiltNorth
 
-toHashable = fmap V.toList . V.toList
+newtype HashableMatrix a = HashableMatrix (V.Vector (V.Vector a)) deriving Eq
+unMatrix (HashableMatrix x) = x
+
+instance (Eq a, Hashable a) => Hashable (HashableMatrix a) where
+    hashWithSalt seed = hashWithSalt seed . fmap V.toList . V.toList . unMatrix
+
+toHashable = HashableMatrix
 
 northBeamScore = sum . fmap score . V.toList . fmap fallLeft . vTranspose
 
