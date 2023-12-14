@@ -53,13 +53,13 @@ solve inputFilename = do
         let stateVector = V.reverse . V.fromList $ stateCache
         let targetStepSimple = cycleStart + (targetStep - cycleStart) `mod` cycleLen
         let targetState = stateVector V.! targetStepSimple
-        let result = northBeamScore targetState
+        let result = sum . fmap score . V.toList . vTranspose $  targetState
         return result
 
     return (solution1, solution2)
 
 -- >>> solve "inputs/sample/14.txt"
--- (136,105)
+-- (136,64)
 
 -- >>> solve "inputs/real/14.txt"
--- (105208,Left (83,125))
+-- (105208,102943)
