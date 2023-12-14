@@ -6,6 +6,7 @@ import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 import Data.List (transpose, uncons)
 import Data.Either (isRight)
+import Utils (vTranspose)
 
 parseToVector = V.fromList . (V.fromList . T.unpack <$>) . T.lines
 
@@ -13,8 +14,6 @@ hasHorizontalMirrorAt terrainMap i = V.and $ V.zipWith (==) mirroredNorthPart so
     where
         (northPart, southPart) = V.splitAt i terrainMap
         mirroredNorthPart = V.reverse northPart
-
-vTranspose = V.fromList . (V.fromList <$>) . transpose . (V.toList <$>) . V.toList
 
 solve1 terrainMap =  rowScores ++ colScores
     where
