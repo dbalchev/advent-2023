@@ -5,9 +5,9 @@ import qualified Data.Text.IO        as T
 import qualified Data.Vector         as V
 import qualified Data.Vector.Mutable as MV
 
+import           Control.Monad       (forM_)
+import           Data.Bool           (bool)
 import           Data.Char           (ord)
-import Data.Bool (bool)
-import Control.Monad (forM_)
 
 aocHash = foldl (\old -> (`mod` 256). (17 *) . (old +) ) 0 . map ord
 
@@ -29,7 +29,7 @@ parseInstruction instructionText
 -- >>> parseInstruction "cm-"
 -- Remove "cm"
 
-searchOp _ oldResult@(Just _) _ _ = oldResult
+searchOp _ oldResult@(Just _) _ _   = oldResult
 searchOp isFound Nothing i inVector = bool Nothing (Just i) (isFound inVector)
 
 applyInstruction (Remove label) lens = maybe lens dropLens $ V.ifoldl' (searchOp ((==label) . fst)) Nothing lens
@@ -42,7 +42,7 @@ applyInstruction (Set label focalLength) lens = maybe appended setLens $ V.ifold
         setLens lensIndex = lens V.// [(lensIndex, (label, focalLength))]
 
 labelOf (Remove label) = label
-labelOf (Set label _) = label
+labelOf (Set label _)  = label
 
 evalInstruction boxes instruction = do
     let boxIndex = aocHash . T.unpack . labelOf $ instruction
