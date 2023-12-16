@@ -2,12 +2,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Day16 where
 import           AocParser               (readCharMap)
+import           Control.Monad           (filterM, forM_)
 import qualified Data.Array.IO           as A
 import qualified Data.Array.IO.Internals as A
 import qualified Data.Array.MArray       as MA
+import           Data.Bool               (bool)
 import qualified Data.Vector             as V
-import Control.Monad (filterM, forM_)
-import Data.Bool (bool)
 
 
 
@@ -31,7 +31,7 @@ solve inputFilename = do
     charMap <- readCharMap inputFilename
     let computeEnergized firstConfig = do
         visited :: (A.IOUArray (Int, Int, Int) Bool) <- MA.newArray ((0, 0, 0), (V.length charMap - 1, V.length (V.head charMap) -1, 4)) False
-        let markVisited direction (i, j) = MA.writeArray visited (i, j, directionIndex direction) True 
+        let markVisited direction (i, j) = MA.writeArray visited (i, j, directionIndex direction) True
         let isVisited direction (i, j) = MA.readArray visited (i, j, directionIndex direction)
         let isValidIndex _ (i, j) = 0 <= i && i < V.length charMap && 0 <= j && j < V.length (V.head charMap)
         uncurry markVisited firstConfig
