@@ -38,6 +38,7 @@ common requires
         hashtables ^>= 1.3.1,
         array ^>= 0.5.4.0,
         hashable ^>= 1.4.3.0,
+        fingertree ^>= 0.1.5.0,
     
 library advent2023-lib
     import: requires
@@ -56,6 +57,11 @@ library advent2023-lib
         Day10,
         Day11,
         Day12,
+        Day13,
+        Day14,
+        Day15,
+        Day16,
+        Day17,
 
 
 executable advent2023
