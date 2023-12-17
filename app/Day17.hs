@@ -15,7 +15,7 @@ import Control.Monad.Trans.Class (MonadTrans(lift))
 import GHC.Stack (HasCallStack)
 import Data.Maybe (isNothing)
 
-solve1 costMap = do
+genericSolve costMap nRepeatsCriteria endCriteria = do
     let nRows = V.length costMap
     let nCols = V.length (V.head costMap)
     let llprint x = return () -- lift . lift . print $ x
@@ -25,9 +25,10 @@ solve1 costMap = do
     HT.insert bestCost (0, 0, (0, 0), 0) 0
     Left result <- runExceptT . (`runStateT` (initPQ, 1)) $ forever $ do
         (oldPQ, oldHeapSize) <- get
+        when (oldHeapSize < 1) $ lift $ throwE (-1)
         llprint ("starting", oldHeapSize, MV.length oldPQ)
         (aStar, i, j, currentCost, lastDirection@(oldDI, oldDJ), repeats) <- MV.read oldPQ 0
-        llprint ("ij", i, j, currentCost, aStar)
+        llprint ("ij", i, j, currentCost, aStar, repeats)
         when (oldHeapSize > 1) $ H.pop (flip compare) oldPQ 0 (oldHeapSize - 1)
         llprint "popping"
         put (oldPQ, oldHeapSize - 1)
@@ -43,8 +44,8 @@ solve1 costMap = do
                 let newJ = j + dj
                 let newCost = currentCost + (costMap V.! newI V.! newJ)
                 let newRepeats = if newDirection == lastDirection then repeats + 1 else 1
-                when (0 <= newI && newI < nRows && 0 <= newJ && newJ < nCols && newRepeats < 4 && (di /= -oldDI || dj /= -oldDJ)) $ do
-                    when (newI == nRows - 1 && newJ == nCols - 1) $ do
+                when (0 <= newI && newI < nRows && 0 <= newJ && newJ < nCols && nRepeatsCriteria (repeats,newRepeats) && (di /= -oldDI || dj /= -oldDJ)) $ do
+                    when (newI == nRows - 1 && newJ == nCols - 1 && endCriteria (repeats, newRepeats)) $ do
                         lift $ throwE newCost
                     (pq, hs) <- get
                     let 
@@ -53,18 +54,23 @@ solve1 costMap = do
                     shouldInsert <- lift . lift $ HT.mutate bestCost (newI, newJ, newDirection, newRepeats) mutation
                     when shouldInsert $ do
                         H.heapInsert (flip compare) pq 0 hs (makeState newCost newI newJ newDirection newRepeats)
-                        llprint ("pushing", i, j, hs)
+                        llprint ("pushing", newI, newJ, newCost)
                         put (pq, hs + 1)
     return result
 
 solve inputFilename = do
     costMap <- (fmap ((read :: String -> Int) . singleton) <$>) <$> readCharMap inputFilename
-    solution1 <- solve1 costMap
-    let foo = 3
-    return solution1
+    solution1 <- genericSolve costMap ((< 4).snd) (const True)
+    solution2 <- genericSolve costMap (\(oldR, newR) -> newR <= 10 && (oldR == 0 || oldR >= 4 || newR >= 2)) (\(oldR, newR) -> newR >= 4)
+
+    return (solution1, solution2)
 
 -- >>> solve "inputs/sample/17.txt"
--- 102
+-- (102,94)
+
+-- >>> solve "inputs/sample/17.2.txt"
+-- (59,71)
+
 
 -- >>> solve "inputs/real/17.txt"
--- 861
+-- (861,1037)
