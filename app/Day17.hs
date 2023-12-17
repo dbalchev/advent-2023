@@ -21,7 +21,7 @@ genericSolve costMap nRepeatsCriteria endCriteria = do
     let llprint x = return () -- lift . lift . print $ x
     let makeState currentCost i j direction repeats = (currentCost + (nRows - i - 1) + nCols - j - 1, i, j, currentCost, direction, repeats::Int)
     initPQ <- MV.replicate 4 (makeState 0 0 0 (0, 0) 0)
-    bestCost <- HT.new :: IO (HT.BasicHashTable _ Int )
+    bestCost <- HT.new :: IO (HT.BasicHashTable w Int )
     HT.insert bestCost (0, 0, (0, 0), 0) 0
     Left result <- runExceptT . (`runStateT` (initPQ, 1)) $ forever $ do
         (oldPQ, oldHeapSize) <- get
@@ -33,7 +33,7 @@ genericSolve costMap nRepeatsCriteria endCriteria = do
         llprint "popping"
         put (oldPQ, oldHeapSize - 1)
         when (oldHeapSize - 1 + 4 > MV.length oldPQ) $ do
-            llprint $ "resizing"
+            llprint "resizing"
             (oldPQ, hs) <- get
             newPQ <- MV.grow oldPQ (MV.length oldPQ)
             put (newPQ, hs)
