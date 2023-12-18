@@ -9,6 +9,7 @@ import qualified Data.Array.MArray         as MA
 import           Data.Bool                 (bool)
 import qualified Data.Text                 as T
 import qualified Data.Text.IO              as T
+import qualified Data.Text.Read            as T
 import qualified Data.Vector               as V
 
 parseLine :: T.Text -> (Char, Int, T.Text)
@@ -54,6 +55,21 @@ floodFill segments = do
     --     print elements
     sum <$> forM indices (fmap (bool 1 0.(`elem` outColors)) . MA.readArray segments)
 
+decodePart2 (_, _, h) = (decodeDir $ T.last h, number)
+    where
+        decodeDir '0' = 'R'
+        decodeDir '1' = 'D'
+        decodeDir '2' = 'L'
+        decodeDir '3' = 'U'
+        Right (number :: Int, _) = T.hexadecimal (T.init h)
+
+-- >>> decodePart2 (0, 1, T.pack "70c710")
+-- ('R',461937)
+
+oArea (i1, j1) (i2, j2) = i1 * j2 - i2 * j1
+
+dLen (i1, j1) (i2, j2) = abs (i1 - i2) + abs (j1 - j2)
+
 solve inputFilename = do
     plan <- V.fromList . fmap parseLine . T.lines <$> T.readFile inputFilename
     let countDir dir = sum . map (\(a, b, _) -> bool 0 b (a == dir)) . V.toList $ plan
@@ -77,11 +93,21 @@ solve inputFilename = do
             (i, j) <- get
             lift $ MA.writeArray segments (i, j) 1
     solution1 :: Int <- floodFill segments
+    let decoded = V.map decodePart2 plan
+    let
+        nextV (i, j) (dir, nSteps) = (i + di * nSteps, j + dj * nSteps)
+            where
+                (di, dj)= getDir dir
+    let p1Vertices = V.fromList . scanl nextV (0, 0) . map (\(a, b, _) -> (a, b)) . V.toList $ plan
+    let p2vertices = V.fromList . scanl nextV (0, 0) . V.toList $ decoded
 
-    return solution1
+    let length = V.sum $ V.zipWith dLen p2vertices (V.tail p2vertices)
+    let totalOArea = V.sum $ V.zipWith oArea p2vertices (V.tail p2vertices)
+    let totalArea = (length + abs totalOArea + 2) `div` 2
+    return (solution1, totalArea)
 
 -- >>> solve "inputs/sample/18.txt"
--- 62
+-- (62,952408144115)
 
 -- >>> solve "inputs/real/18.txt"
--- 44436
+-- (44436,106941819907437)
