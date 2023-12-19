@@ -78,6 +78,43 @@ evaluateWorkflow (CompiledInstruction (Conditional (field, comp, compValue) ifTr
 -- >>> parsePart "{x=787,m=2655,a=1222,s=2876}"
 -- [('x',787),('m',2655),('a',1222),('s',2876)]
 
+applyFilter (field, comp, compValue) ranges
+    | comp == LT && fieldMin >= compValue = []
+    | comp == GT && fieldMax <= compValue = []
+    | otherwise                           = map rangeUpdate ranges
+    where
+        Just (fieldMin, fieldMax) = lookup field ranges
+        newFieldLT = (fieldMin, min (compValue - 1) fieldMax)
+        newFieldGT = (max (compValue + 1) fieldMin, fieldMax)
+        newField = bool newFieldLT newFieldGT (comp == GT)
+        rangeUpdate range@(rf, (rmin, rmax))
+            | rf == field = (rf, newField)
+            | otherwise   = range
+
+-- >>> applyFilter ('m', LT, 20) [('x', (1, 4000)), ('m', (1, 100)), ('a', (1, 4000)), ('s', (1, 4000))]
+-- [('x',(1,4000)),('m',(1,19)),('a',(1,4000)),('s',(1,4000))]
+
+-- >>> applyFilter ('m', GT, 20) [('x', (1, 4000)), ('m', (1, 100)), ('a', (1, 4000)), ('s', (1, 4000))]
+-- [('x',(1,4000)),('m',(21,100)),('a',(1,4000)),('s',(1,4000))]
+
+-- >>> applyFilter ('m', GT, 20) [('x', (1, 4000)), ('m', (30, 100)), ('a', (1, 4000)), ('s', (1, 4000))]
+-- [('x',(1,4000)),('m',(30,100)),('a',(1,4000)),('s',(1,4000))]
+
+invertFilter (field, LT, compValue) = (field, GT, compValue - 1)
+invertFilter (field, GT, compValue) = (field, LT, compValue + 1)
+
+-- >>> invertFilter ('x', LT, 20)
+
+computePassingRange (CompiledInstruction Reject) = []
+computePassingRange (CompiledInstruction Accept) = [[('x', (1, 4000)), ('m', (1, 4000)), ('a', (1, 4000)), ('s', (1, 4000))]]
+computePassingRange (CompiledInstruction (Conditional originalFilter ifTrue ifFalse))
+    = do
+        (currentFilter, currentRanges) <- zip [originalFilter, invertFilter originalFilter] (map computePassingRange [ifTrue, ifFalse])
+        map (applyFilter currentFilter) currentRanges
+    -- where
+
+computeRangeSize range = product $ map ((\(start, end) -> end - start + 1) . snd) range
+
 solve inputFilename = do
     fileContent <- T.readFile inputFilename
     let (instructionLines, _:partsLines) = break T.null $ T.lines fileContent
@@ -85,10 +122,15 @@ solve inputFilename = do
     let parts = parsePart <$> partsLines
     let passingParts = filter (evaluateWorkflow workflow) parts
     let solution1 = sum . concatMap (fmap snd) $ passingParts 
-    return (solution1)
+    let passingRange = computePassingRange workflow
+    let solution2 = sum $ map computeRangeSize passingRange
+    return (solution1, solution2)
 
 -- >>> solve "inputs/sample/19.txt"
--- 19114
+-- (19114,167409079868000)
+
+-- >>> solve "inputs/sample/19.dani.txt"
+-- (7540,176192000000000)
 
 -- >>> solve "inputs/real/19.txt"
--- 432427
+-- (432427,143760172569135)
