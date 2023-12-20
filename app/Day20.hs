@@ -4,8 +4,9 @@
 module Day20 where
 
 import           Control.Monad       (forM_)
+import           Data.Bool           (bool)
 import qualified Data.HashTable.IO   as HT
-import           Data.Maybe          (fromJust)
+import           Data.Maybe          (fromJust, fromMaybe)
 import qualified Data.Text           as T
 import qualified Data.Text.IO        as T
 import qualified Data.Vector         as V
@@ -35,19 +36,26 @@ data CompiledModule = CompiledModule (ModuleType () (V.Vector Int)) T.Text Int (
 updatePulses 0 [a, b] = [a + 1, b]
 updatePulses 1 [a, b] = [a, b + 1]
 
-processPulse moduleStates pulse inputIndex (CompiledModule Broadcaster name moduleIndex outputs) = do
+processPulse moduleStates pulse _ (CompiledModule Broadcaster name moduleIndex outputs) = do
     let nextActions = map (pulse,moduleIndex, ) $ V.toList outputs
-    return (updatePulses pulse [0, 0], nextActions)
-processPulse moduleStates 1 inputIndex (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
-    return ([0, 1], [])
-processPulse moduleStates 0 inputIndex (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
-    Left oldState <- MV.read moduleStates moduleIndex
+    return nextActions
+processPulse moduleStates 1 _ (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
+    return []
+processPulse moduleStates 0 _ (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
+    FlipFlop oldState <- MV.read moduleStates moduleIndex
     let newState = 1 - oldState
-    MV.write moduleStates moduleIndex (Left newState)
+    MV.write moduleStates moduleIndex (FlipFlop newState)
     let nextActions = map (newState,moduleIndex,) $ V.toList outputs
-    return ([1, 0], nextActions)
--- processPulse moduleStates pulse inputIndex (CompiledModule Conjunction name moduleIndex outputs) = do
---     Right state <- MV.read moduleStates moduleIndex
+    return nextActions
+processPulse moduleStates pulse inputModuleIndex (CompiledModule (Conjunction inputRemap) name moduleIndex outputs) = do
+    Conjunction state <- MV.read moduleStates moduleIndex
+    let inputIndex = inputRemap V.! inputModuleIndex
+    MV.write state inputIndex pulse
+    allHigh <- MV.foldl (\acc c -> acc && (c == 1)) True state
+    let nextPulse = bool 1 0 allHigh
+    let nextActions = map (nextPulse,moduleIndex,) $ V.toList outputs
+    return nextActions
+
 
 
 
@@ -56,7 +64,10 @@ makeStep moduleStates ([], []) = do
     return [0, 0]
 
 makeStep moduleStates (stack, []) = makeStep moduleStates ([], reverse stack)
-makeStep moduleStates (oldStack, (pulse, currentModule): restQueue) = return [0, 0]
+makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) = do
+    nextActions <- processPulse moduleStates pulse inputModuleIndex currentModule
+    nextResults <- makeStep moduleStates (nextActions ++ oldStack, restQueue)
+    return $ updatePulses pulse nextResults
 
 solve inputFilename = do
     parsedModules <- V.fromList . fmap parseModule . T.lines <$> T.readFile inputFilename
@@ -68,15 +79,25 @@ solve inputFilename = do
         forM_ (zip [0..] $ V.toList parsedModules) $ \(i, (moduleType, name, outputs)) -> do
             HT.insert nameToIndex name i
             forM_ outputs $ \output -> do
-                HT.mutate nameToInputNames output (\oldState -> Just (name: fromMaybe [] oldState))
+                HT.mutate nameToInputNames output (\oldState -> (Just (name: fromMaybe [] oldState), ()))
 
-        let fromName name = (allModules V.!) . fromJust <$> HT.lookup nameToIndex name
         let
+            indexFromName name = fromJust <$> HT.lookup nameToIndex name
+            fromName name = (allModules V.!) <$> indexFromName name
             compileModule (moduleType, name, outputs) = do
                 print ("fixing", name)
                 Just moduleIndex <- HT.lookup nameToIndex name
                 compiledOutputs <- traverse fromName outputs
-                return $ CompiledModule moduleType name moduleIndex compiledOutputs
+                let
+                    compileModuleType Broadcaster   = return Broadcaster
+                    compileModuleType (FlipFlop ()) = return $ FlipFlop ()
+                    compileModuleType (Conjunction ()) = do
+                        Just inputs <- HT.lookup nameToInputNames name
+                        inputIndices <- traverse indexFromName inputs
+                        let result = V.replicate (V.length parsedModules) (-1) V.// zip inputIndices [0..]
+                        return $ Conjunction result
+                compiledModuleType <- compileModuleType moduleType
+                return $ CompiledModule compiledModuleType name moduleIndex compiledOutputs
         allModules <- traverse compileModule parsedModules
         broadcaster <- fromName "broadcaster"
 
