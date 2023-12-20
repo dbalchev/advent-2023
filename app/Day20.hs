@@ -11,7 +11,7 @@ import qualified Data.Text.IO        as T
 import qualified Data.Vector         as V
 import qualified Data.Vector.Mutable as MV
 
-data ModuleType = Broadcaster | FlipFlop | Conjunction
+data ModuleType ff cc = Broadcaster | FlipFlop ff | Conjunction cc
     deriving (Show, Eq, Ord)
 
 parseModule line = (moduleType, name, outputs)
@@ -20,8 +20,8 @@ parseModule line = (moduleType, name, outputs)
         outputs = V.fromList $ T.splitOn ", " outputsString
         firstTN = T.head typeAndName
         (moduleType, name)
-            | firstTN == '%' = (FlipFlop, T.tail typeAndName)
-            | firstTN == '&' = (Conjunction, T.tail typeAndName)
+            | firstTN == '%' = (FlipFlop (), T.tail typeAndName)
+            | firstTN == '&' = (Conjunction (), T.tail typeAndName)
             | otherwise      = (Broadcaster, typeAndName)
 
 -- >>> parseModule "broadcaster -> a, b, c"
@@ -30,7 +30,7 @@ parseModule line = (moduleType, name, outputs)
 -- >>> parseModule "%a -> b"
 -- (FlipFlop,"a",["b"])
 
-data CompiledModule = CompiledModule ModuleType T.Text Int (V.Vector CompiledModule)
+data CompiledModule = CompiledModule (ModuleType () (V.Vector Int)) T.Text Int (V.Vector CompiledModule)
 
 updatePulses 0 [a, b] = [a + 1, b]
 updatePulses 1 [a, b] = [a, b + 1]
@@ -38,16 +38,16 @@ updatePulses 1 [a, b] = [a, b + 1]
 processPulse moduleStates pulse inputIndex (CompiledModule Broadcaster name moduleIndex outputs) = do
     let nextActions = map (pulse,moduleIndex, ) $ V.toList outputs
     return (updatePulses pulse [0, 0], nextActions)
-processPulse moduleStates 1 inputIndex (CompiledModule FlipFlop name moduleIndex outputs) = do
+processPulse moduleStates 1 inputIndex (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
     return ([0, 1], [])
-processPulse moduleStates 0 inputIndex (CompiledModule FlipFlop name moduleIndex outputs) = do
+processPulse moduleStates 0 inputIndex (CompiledModule (FlipFlop ()) name moduleIndex outputs) = do
     Left oldState <- MV.read moduleStates moduleIndex
     let newState = 1 - oldState
     MV.write moduleStates moduleIndex (Left newState)
     let nextActions = map (newState,moduleIndex,) $ V.toList outputs
     return ([1, 0], nextActions)
-processPulse moduleStates pulse inputIndex (CompiledModule Conjunction name moduleIndex outputs) = do
-    Right state <- MV.read moduleStates moduleIndex
+-- processPulse moduleStates pulse inputIndex (CompiledModule Conjunction name moduleIndex outputs) = do
+--     Right state <- MV.read moduleStates moduleIndex
 
 
 
