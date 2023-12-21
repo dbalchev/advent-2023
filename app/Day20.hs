@@ -3,7 +3,7 @@
 {-# LANGUAGE TupleSections     #-}
 module Day20 where
 
-import           Control.Monad       (forM_)
+import           Control.Monad       (forM_, when)
 import           Data.Bool           (bool)
 import qualified Data.HashTable.IO   as HT
 import           Data.Maybe          (fromJust, fromMaybe)
@@ -12,6 +12,7 @@ import qualified Data.Text.IO        as T
 import qualified Data.Vector         as V
 import qualified Data.Vector.Mutable as MV
 import Data.List (groupBy, group, sort)
+import Control.Exception (throwIO, try, ErrorCall (ErrorCall))
 
 data ModuleType ff cc = Broadcaster | FlipFlop ff | Conjunction cc
     deriving (Show, Eq, Ord)
@@ -59,15 +60,16 @@ processPulse moduleStates pulse inputModuleIndex (CompiledModule (Conjunction in
 
 extractModuleType (CompiledModule moduleType _ _ _ ) = moduleType
 
-makeStep moduleStates ([], []) acc = do
+makeStep moduleStates ([], []) listener acc = do
     return acc
 
-makeStep moduleStates (stack, []) acc = makeStep moduleStates ([], reverse stack) acc
-makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) acc = do
+makeStep moduleStates (stack, []) listener acc = makeStep moduleStates ([], reverse stack) listener acc
+makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) listener acc = do
     -- let (CompiledModule moduleType name _ _) = currentModule 
     -- print ("pulse", pulse, name, moduleType)
+    listener pulse currentModule
     nextActions <- processPulse moduleStates pulse inputModuleIndex currentModule
-    makeStep moduleStates (nextActions ++ oldStack, restQueue) (updatePulses pulse acc)
+    makeStep moduleStates (nextActions ++ oldStack, restQueue) listener (updatePulses pulse acc)
 
 makeModuleInitialState Broadcaster = return Broadcaster
 makeModuleInitialState (FlipFlop ()) = return $ FlipFlop 0
@@ -82,7 +84,7 @@ solve inputFilename = do
     parsedModulesRaw <- V.fromList . fmap parseModule . T.lines <$> T.readFile inputFilename
     let parsedNames = map (\(_, n, _) -> n) $ V.toList parsedModulesRaw
     let outputNames = map head . group . sort . concatMap (\(_, _, o) -> V.toList o) $ parsedModulesRaw
-    let parsedModules = parsedModulesRaw V.++ V.fromList [(Broadcaster, n, V.empty) | n <- filter (not . (`elem` parsedNames))outputNames]
+    let parsedModules = parsedModulesRaw V.++ V.fromList [(Broadcaster, n, V.empty) | n <- filter (not . (`elem` parsedNames)) outputNames]
     (broadcaster, allModules) <- mdo
         nameToIndex <- HT.new :: IO (HT.BasicHashTable a b)
         nameToInputNames <- HT.new :: IO (HT.BasicHashTable a b)
@@ -115,14 +117,21 @@ solve inputFilename = do
         return (broadcaster, allModules)
     moduleStateV <- makeInitialState $ fmap extractModuleType allModules
     moduleState <- V.thaw moduleStateV
-    let 
-        repSteps :: Int -> [Int] -> IO [Int]
-        repSteps 0 acc = return acc
-        repSteps n acc = do
-            newAcc <- makeStep moduleState ([], [(0, -1, broadcaster)]) acc
-            repSteps (n-1) newAcc
-    pulses <- repSteps 1000 [0, 0]
-    return (pulses, product pulses)
+    let
+        repSteps :: (Int -> Int -> CompiledModule -> IO ()) ->  Int -> [Int] -> IO [Int]
+        repSteps listener 1000 acc = return acc
+        repSteps listener n acc = do
+            newAcc <- makeStep moduleState ([], [(0, -1, broadcaster)]) (listener n) acc
+            repSteps listener (n+1) newAcc
+    pulses1 <- repSteps (\_ _ _ -> return ()) 0 [0, 0]
+    moduleStateV <- makeInitialState $ fmap extractModuleType allModules
+    moduleState <- V.thaw moduleStateV
+    let
+        listenForEnd stepNo pulse (CompiledModule _ name _ _) = do
+            when (pulse == 0 && name == "rx") $ throwIO $ ErrorCall $ show (stepNo + 1)
+    
+    result2 <- try (repSteps listenForEnd (-100000) [0, 0]) :: IO (Either ErrorCall [Int])
+    return (pulses1, product pulses1, result2)
 
 -- >>> solve "inputs/sample/20.1.txt"
 -- ([8000,4000],32000000)
@@ -131,4 +140,4 @@ solve inputFilename = do
 -- ([4250,2750],11687500)
 
 -- >>> solve "inputs/real/20.txt"
--- ([17529,47116],825896364)
+-- ([17529,47116],825896364,Right [193621,519977])
