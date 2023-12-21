@@ -11,6 +11,7 @@ import qualified Data.Text           as T
 import qualified Data.Text.IO        as T
 import qualified Data.Vector         as V
 import qualified Data.Vector.Mutable as MV
+import Data.List (groupBy, group, sort)
 
 data ModuleType ff cc = Broadcaster | FlipFlop ff | Conjunction cc
     deriving (Show, Eq, Ord)
@@ -56,22 +57,32 @@ processPulse moduleStates pulse inputModuleIndex (CompiledModule (Conjunction in
     let nextActions = map (nextPulse,moduleIndex,) $ V.toList outputs
     return nextActions
 
+extractModuleType (CompiledModule moduleType _ _ _ ) = moduleType
 
+makeStep moduleStates ([], []) acc = do
+    return acc
 
-
-
-makeStep moduleStates ([], []) = do
-    return [0, 0]
-
-makeStep moduleStates (stack, []) = makeStep moduleStates ([], reverse stack)
-makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) = do
+makeStep moduleStates (stack, []) acc = makeStep moduleStates ([], reverse stack) acc
+makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) acc = do
+    -- let (CompiledModule moduleType name _ _) = currentModule 
+    -- print ("pulse", pulse, name, moduleType)
     nextActions <- processPulse moduleStates pulse inputModuleIndex currentModule
-    nextResults <- makeStep moduleStates (nextActions ++ oldStack, restQueue)
-    return $ updatePulses pulse nextResults
+    makeStep moduleStates (nextActions ++ oldStack, restQueue) (updatePulses pulse acc)
+
+makeModuleInitialState Broadcaster = return Broadcaster
+makeModuleInitialState (FlipFlop ()) = return $ FlipFlop 0
+makeModuleInitialState (Conjunction inputRemap) = do
+    let stateSize = 1 + V.maximum inputRemap
+    Conjunction <$> MV.replicate stateSize (-1)
+
+makeInitialState ::  V.Vector (ModuleType () (V.Vector Int)) -> IO (V.Vector (ModuleType Int (MV.MVector (MV.PrimState IO) Int)))
+makeInitialState = traverse makeModuleInitialState
 
 solve inputFilename = do
-    parsedModules <- V.fromList . fmap parseModule . T.lines <$> T.readFile inputFilename
-
+    parsedModulesRaw <- V.fromList . fmap parseModule . T.lines <$> T.readFile inputFilename
+    let parsedNames = map (\(_, n, _) -> n) $ V.toList parsedModulesRaw
+    let outputNames = map head . group . sort . concatMap (\(_, _, o) -> V.toList o) $ parsedModulesRaw
+    let parsedModules = parsedModulesRaw V.++ V.fromList [(Broadcaster, n, V.empty) | n <- filter (not . (`elem` parsedNames))outputNames]
     (broadcaster, allModules) <- mdo
         nameToIndex <- HT.new :: IO (HT.BasicHashTable a b)
         nameToInputNames <- HT.new :: IO (HT.BasicHashTable a b)
@@ -102,10 +113,22 @@ solve inputFilename = do
         broadcaster <- fromName "broadcaster"
 
         return (broadcaster, allModules)
-
-
-    let foo = 3
-    return broadcaster
+    moduleStateV <- makeInitialState $ fmap extractModuleType allModules
+    moduleState <- V.thaw moduleStateV
+    let 
+        repSteps :: Int -> [Int] -> IO [Int]
+        repSteps 0 acc = return acc
+        repSteps n acc = do
+            newAcc <- makeStep moduleState ([], [(0, -1, broadcaster)]) acc
+            repSteps (n-1) newAcc
+    pulses <- repSteps 1000 [0, 0]
+    return (pulses, product pulses)
 
 -- >>> solve "inputs/sample/20.1.txt"
--- [(Broadcaster,"broadcaster",["a","b","c"]),(FlipFlop,"a",["b"]),(FlipFlop,"b",["c"]),(FlipFlop,"c",["inv"]),(Conjunction,"inv",["a"])]
+-- ([8000,4000],32000000)
+
+-- >>> solve "inputs/sample/20.2.txt"
+-- ([4250,2750],11687500)
+
+-- >>> solve "inputs/real/20.txt"
+-- ([17529,47116],825896364)
