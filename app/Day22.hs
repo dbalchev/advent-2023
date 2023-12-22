@@ -21,22 +21,21 @@ readLine line = tokens
 
 getZ (_, _, z) = z
 
-sortCriteria :: (Int, [[Int]]) -> Int
-sortCriteria = minimum . map last . snd
+-- sortCriteria :: (Int, [[Int]]) -> Int
+sortCriteria = minimum . map last
 
--- >>> sortCriteria (5, [[1,1,8],[1,1,9]])
--- 8
+
+unique = map head . group . sort
 
 process1 points = do
     let
-        numPoints = zip [0..] points
         extract f = concatMap (map f) points
         minX = minimum (extract head)
         maxX = maximum (extract head)
         minY = minimum (extract (head . tail))
         maxY = maximum (extract (head . tail))
 
-        sortedPoints = sortOn sortCriteria numPoints
+        sortedPoints = zip [0..] $ sortOn sortCriteria points
 
     currentTop <- MA.newArray ((minX, minY), (maxX, maxY)) (0, -1) :: IO (IOArray (Int, Int) (Int, Int))
     let
@@ -45,7 +44,7 @@ process1 points = do
             let volumePoints = [(x, y) | x <- [x1..x2], y <- [y1..y2]]
             topState <- traverse (MA.readArray currentTop) volumePoints
             let topZ = maximum . map fst $ topState
-            let supportingIndices = map head . group . sort . filter (/= (-1)) . map snd . filter ((== topZ) . fst) $ topState
+            let supportingIndices = unique . filter (/= (-1)) . map snd . filter ((== topZ) . fst) $ topState
             let minZ = min z1 z2
             let maxZ = max z1 z2
             let newTopZ = maxZ - (minZ - topZ - 1)
@@ -68,10 +67,26 @@ solve inputFilename = do
         supportedByVector = makeSupportArray (map (\(a, b) -> (b, a)) supportGraph)
         removable i = all (\supported -> V.length (supportedByVector V.! supported) > 1) (supportsVector V.! i)
         nRemovable = length . filter removable $ [0..nPoints - 1]
-    return nRemovable
+        countFalling i = do
+            currentNSupport <- MA.newArray (0, nPoints - 1) 0  :: IO(IOArray Int Int)
+            forM_ [0..nPoints -1] $ \j -> MA.writeArray currentNSupport j (V.length (supportedByVector V.! j))
+            let
+                removeBrick :: [Int] -> Int -> IO Int
+                removeBrick [] acc = return acc
+                removeBrick (x:xs) acc = do
+                    forM_ (supportsVector V.! x) $ \j -> do
+                        oldV <- MA.readArray currentNSupport j
+                        MA.writeArray currentNSupport j (oldV - 1)
+                    nexts <- map fst . filter ((== 0) . snd) <$> traverse (\j -> (j,) <$> MA.readArray currentNSupport j) (V.toList $ supportsVector V.! x)
+                    removeBrick (nexts ++ xs) (acc + 1)
+            removeBrick [i] (-1)
+
+        -- reverseFallIndices = V.constructN (\v -> ) nPoints
+    fallingCounts <- traverse countFalling [0..nPoints - 1]
+    return (nRemovable, sum fallingCounts)
 
 -- >>> solve "inputs/sample/22.txt"
--- 5
+-- (5,7)
 
 -- >>> solve "inputs/real/22.txt"
--- 391
+-- (391,69601)
