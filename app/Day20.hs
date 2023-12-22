@@ -67,8 +67,8 @@ makeStep moduleStates (stack, []) listener acc = makeStep moduleStates ([], reve
 makeStep moduleStates (oldStack, (pulse, inputModuleIndex, currentModule): restQueue) listener acc = do
     -- let (CompiledModule moduleType name _ _) = currentModule 
     -- print ("pulse", pulse, name, moduleType)
-    listener pulse currentModule
     nextActions <- processPulse moduleStates pulse inputModuleIndex currentModule
+    listener pulse currentModule
     makeStep moduleStates (nextActions ++ oldStack, restQueue) listener (updatePulses pulse acc)
 
 makeModuleInitialState Broadcaster = return Broadcaster
@@ -124,20 +124,31 @@ solve inputFilename = do
             newAcc <- makeStep moduleState ([], [(0, -1, broadcaster)]) (listener n) acc
             repSteps listener (n+1) newAcc
     pulses1 <- repSteps (\_ _ _ -> return ()) 0 [0, 0]
-    moduleStateV <- makeInitialState $ fmap extractModuleType allModules
-    moduleState <- V.thaw moduleStateV
     let
-        listenForEnd stepNo pulse (CompiledModule _ name _ _) = do
+        stepOffset = -100000
+        listenForEnd stepNo pulse (CompiledModule _ name moduleIndex _) = do
+            when (pulse == 1 && name == "zg") $ do
+                Conjunction state <- MV.read moduleState moduleIndex
+                frozemState <- V.freeze state
+                print ("high", frozemState, stepNo - stepOffset)
             when (pulse == 0 && name == "rx") $ throwIO $ ErrorCall $ show (stepNo + 1)
-    
-    result2 <- try (repSteps listenForEnd (-100000) [0, 0]) :: IO (Either ErrorCall [Int])
-    return (pulses1, product pulses1, result2)
+        resultSteps = [
+                        [4056, 8113, 12170, 16227],
+                        [3928, 7857, 11786, 15715],
+                        [3906, 7813, 11720, 15627],
+                        [3910,7821 ,11732, 15643]
+                        ]
+        deltas = map (head . (\xs -> zipWith (-) (tail xs) xs)) resultSteps
+        result2 = foldl1 lcm deltas
+
+    -- result2 <- try (repSteps listenForEnd stepOffset [0, 0]) :: IO (Either ErrorCall [Int])
+    return (pulses1, result2)
 
 -- >>> solve "inputs/sample/20.1.txt"
--- ([8000,4000],32000000)
+-- ProgressCancelledException
 
 -- >>> solve "inputs/sample/20.2.txt"
 -- ([4250,2750],11687500)
 
 -- >>> solve "inputs/real/20.txt"
--- ([17529,47116],825896364,Right [193621,519977])
+-- ([17529,47116],243566897206981)
