@@ -4,7 +4,7 @@ module Day23 where
 import           AocParser               (readCharMap)
 import qualified Data.Vector             as V
 
-import           Control.Monad           (filterM, forM, foldM, forM_)
+import           Control.Monad           (filterM, forM, foldM, forM_, when)
 import           Data.Array.IO.Internals (IOArray (IOArray))
 import qualified Data.Array.MArray       as MA
 import           Data.Bool               (bool)
@@ -25,7 +25,7 @@ solve inputFilename = do
             '<' -> [(i, j - 1)]
             'v' -> [(i + 1, j)]
             '>' -> [(i, j + 1)]
-        validStepOptions tt pos = [(i, j)| (i, j) <- stepOptions tt pos, 0 <= i && i < nRows && 0 <= j && j <= nCols && hikeMap V.! i V.! j /= '#']
+        validStepOptions tt pos = [(i, j)| (i, j) <- stepOptions tt pos, 0 <= i && i < nRows && 0 <= j && j < nCols && hikeMap V.! i V.! j /= '#']
     visited <-  MA.newArray ((0, 0), (nRows - 1, nCols - 1)) False :: IO (IOArray (Int, Int) Bool)
 
     let
@@ -51,35 +51,41 @@ solve inputFilename = do
                         go extensionPath@(currentPos:_) wasOutside = do
                             status <- MA.readArray currentVisited currentPos
                             if status == 1
-                                then return (length extensionPath, seq (length extensionPath) extensionPath)
+                                then return $ V.fromList extensionPath
                                 else do
                                     MA.writeArray currentVisited currentPos 3
                                     let
-                                        foldfn (oldL, oldPath) nextPos = do
-                                            (newL, newPath) <- go (nextPos: extensionPath) (wasOutside || status == 0)
-                                            if oldL < newL
-                                                then return (newL, newPath)
-                                                else return (oldL, oldPath)
+                                        foldfn oldPath nextPos = do
+                                            newPath <- go (nextPos: extensionPath) (wasOutside || status == 0)
+                                            if V.length oldPath < V.length newPath
+                                                then return newPath
+                                                else return oldPath
                                         maxStatus = bool 1 2 wasOutside
                                     unVisitedStepOptions <- filterM (fmap (< maxStatus) <$> MA.readArray currentVisited) (validStepOptions tt currentPos)
-                                    pathToExtension <- foldM foldfn (0, []) unVisitedStepOptions
+                                    pathToExtension <- foldM foldfn V.empty unVisitedStepOptions
                                     MA.writeArray currentVisited currentPos 0
                                     return pathToExtension
                     go [currentPath V.! i] False
                 extendFrom startIndex currentPath = do
-                    (_, extension) <- findExtendFrom startIndex currentPath
+                    extension <- findExtendFrom startIndex currentPath
                     -- print ("ext", extension)
                     if null extension
                         then return Nothing
                         else do
                             let
-                                endPos = head extension
-                                vExtension = V.fromList extension
+                                endPos = V.head extension
                                 Just endIndex = V.findIndex (==endPos) currentPath
                                 (firstIndex, lastIndex) = if startIndex < endIndex then (startIndex, endIndex) else (endIndex, startIndex)
-                                extensionToAdd = if startIndex < endIndex then V.reverse vExtension else vExtension
-                                amendedPath = V.take (firstIndex - 1) currentPath V.++ extensionToAdd V.++ V.drop lastIndex currentPath
+                                extensionToAdd = if startIndex < endIndex then V.reverse extension else extension
+                                amendedPath = V.take firstIndex currentPath V.++ extensionToAdd V.++ V.drop (lastIndex + 1) currentPath
                                 lengthGain = lastIndex - firstIndex < length extension
+                            -- when (V.last extensionToAdd == (19, 19)) $ do
+                            --     print "foo"
+                            --     print (currentPath V.! firstIndex, currentPath V.! lastIndex)
+                            --     print (V.take firstIndex currentPath)
+                            --     print (extensionToAdd)
+                            --     print (V.drop lastIndex currentPath)
+                            --     print "bar"
                             if startIndex < endIndex && lastIndex - firstIndex + 1 < length extension
                                 then return $ Just amendedPath
                                 else return Nothing
@@ -97,13 +103,14 @@ solve inputFilename = do
             extendPath tt $ V.reverse (V.fromList initialPath)
 
     maxPath1 <- findMaxPath id
+    -- print maxPath1
     maxPath2 <- findMaxPath (\c -> bool '#' '.' (c /= '#'))
 
     let foo = 3
     return (V.length maxPath1 - 1, V.length maxPath2 - 1)
 
 -- >>> solve "inputs/sample/23.txt"
--- (90,154)
+-- (94,154)
 
 -- >>> solve "inputs/real/23.txt"
 -- (2110,-1)
