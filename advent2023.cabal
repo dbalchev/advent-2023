@@ -67,6 +67,7 @@ library advent2023-lib
         Day20,
         Day21,
         Day22,
+        Day23,
 
 
 executable advent2023

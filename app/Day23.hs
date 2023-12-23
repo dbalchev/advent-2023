@@ -8,6 +8,7 @@ import           Control.Monad           (filterM, forM, foldM, forM_)
 import           Data.Array.IO.Internals (IOArray (IOArray))
 import qualified Data.Array.MArray       as MA
 import           Data.Bool               (bool)
+import Data.Maybe (fromMaybe)
 
 solve inputFilename = do
     hikeMap <- readCharMap inputFilename
@@ -28,15 +29,6 @@ solve inputFilename = do
     visited <-  MA.newArray ((0, 0), (nRows - 1, nCols - 1)) False :: IO (IOArray (Int, Int) Bool)
 
     let
-        hike tt currentPath@(currentPos:_)
-            | currentPos == (nRows - 1, exitCol) = return $ length currentPath
-            | otherwise                          = do
-                let currentPos = head currentPath
-                MA.writeArray visited currentPos True
-                unVisitedStepOptions <- filterM (fmap not <$> MA.readArray visited) (validStepOptions tt currentPos)
-                pathLengths <- traverse (\nextPos -> hike tt (nextPos : currentPath)) unVisitedStepOptions
-                MA.writeArray visited currentPos False
-                return $ maximum (-1: pathLengths)
         findAPath tt currentPath@(currentPos:_)
             | currentPos == (nRows - 1, exitCol) = return currentPath
             | otherwise                          = do
@@ -49,48 +41,69 @@ solve inputFilename = do
                 pathToEnd <- foldM foldfn [] unVisitedStepOptions
                 MA.writeArray visited currentPos False
                 return pathToEnd
-        extendPath tt currentPath = do
-            currentVisited <- MA.newArray ((0, 0), (nRows - 1, nCols - 1)) 0 :: IO (IOArray (Int, Int) Int)
-            forM_ currentPath $ \pos -> MA.writeArray currentVisited pos 1
+        extendPath tt initialPath = do
             let
-                findExtendFrom tt extensionPath@(currentPos:_) = do
-                    status <- MA.readArray currentVisited currentPos
-                    if status == 1
-                        then return extensionPath
-                        else do
-                            MA.writeArray currentVisited currentPos 2
-                            let
-                                foldfn [] nextPos = findExtendFrom tt (nextPos: extensionPath)
-                                foldfn path _ = return path
-                            unVisitedStepOptions <- filterM (fmap (/= 1) <$> MA.readArray currentVisited) (validStepOptions tt currentPos)
-                            pathToExtension <- foldM foldfn [] unVisitedStepOptions
-                            MA.writeArray currentVisited currentPos 0
-                            return pathToExtension
-                extendFrom tt startingPos = do
-                    extension <- findExtendFrom tt [startingPos]
+                findExtendFrom i currentPath = do
+                    currentVisited <- MA.newArray ((0, 0), (nRows - 1, nCols - 1)) 0 :: IO (IOArray (Int, Int) Int)
+                    forM_ currentPath $ \pos -> MA.writeArray currentVisited pos 1
+                    MA.writeArray currentVisited (currentPath V.! i) 2
+                    let
+                        go extensionPath@(currentPos:_) wasOutside = do
+                            status <- MA.readArray currentVisited currentPos
+                            if status == 1
+                                then return (length extensionPath, seq (length extensionPath) extensionPath)
+                                else do
+                                    MA.writeArray currentVisited currentPos 3
+                                    let
+                                        foldfn (oldL, oldPath) nextPos = do
+                                            (newL, newPath) <- go (nextPos: extensionPath) (wasOutside || status == 0)
+                                            if oldL < newL
+                                                then return (newL, newPath)
+                                                else return (oldL, oldPath)
+                                        maxStatus = bool 1 2 wasOutside
+                                    unVisitedStepOptions <- filterM (fmap (< maxStatus) <$> MA.readArray currentVisited) (validStepOptions tt currentPos)
+                                    pathToExtension <- foldM foldfn (0, []) unVisitedStepOptions
+                                    MA.writeArray currentVisited currentPos 0
+                                    return pathToExtension
+                    go [currentPath V.! i] False
+                extendFrom startIndex currentPath = do
+                    (_, extension) <- findExtendFrom startIndex currentPath
+                    -- print ("ext", extension)
                     if null extension
                         then return Nothing
                         else do
                             let
                                 endPos = head extension
-                                Just startIndex = V.findIndex (==startingPos) currentPath
+                                vExtension = V.fromList extension
                                 Just endIndex = V.findIndex (==endPos) currentPath
                                 (firstIndex, lastIndex) = if startIndex < endIndex then (startIndex, endIndex) else (endIndex, startIndex)
-                                extensionToAdd = if startIndex < endIndex then reverse extension else extension
-                                amendedPath = V.take firstIndex currentPath V.++ V.fromList extensionToAdd V.++ V.drop lastIndex currentPath
-                            if lastIndex - firstIndex < length extension
+                                extensionToAdd = if startIndex < endIndex then V.reverse vExtension else vExtension
+                                amendedPath = V.take (firstIndex - 1) currentPath V.++ extensionToAdd V.++ V.drop lastIndex currentPath
+                                lengthGain = lastIndex - firstIndex < length extension
+                            if startIndex < endIndex && lastIndex - firstIndex + 1 < length extension
                                 then return $ Just amendedPath
                                 else return Nothing
-            return [3]
+                go i p
+                    | i == V.length p = return p
+                    | otherwise = do
+                        extended <- extendFrom i p
+                        -- print extended
+                        case extended of
+                            Nothing -> go (i + 1) p
+                            Just e -> go i e
+            go 1 initialPath
+        findMaxPath tt = do
+            initialPath <- findAPath tt [(0, entryCol)]
+            extendPath tt $ V.reverse (V.fromList initialPath)
 
-    maxPathLength1 <- hike id [(0, entryCol)]
-    path2 <- findAPath (\c -> bool '#' '.' (c /= '#')) [(0, entryCol)]
+    maxPath1 <- findMaxPath id
+    maxPath2 <- findMaxPath (\c -> bool '#' '.' (c /= '#'))
 
     let foo = 3
-    return (maxPathLength1 - 1, length path2)
+    return (V.length maxPath1 - 1, V.length maxPath2 - 1)
 
 -- >>> solve "inputs/sample/23.txt"
--- (94,83)
+-- (90,154)
 
 -- >>> solve "inputs/real/23.txt"
--- ProgressCancelledException
+-- (2110,-1)
