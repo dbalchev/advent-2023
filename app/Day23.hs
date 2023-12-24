@@ -51,23 +51,28 @@ solve inputFilename = do
                         go extensionPath@(currentPos:_) wasOutside = do
                             status <- MA.readArray currentVisited currentPos
                             if status == 1
-                                then return $ V.fromList extensionPath
+                                then do
+                                    let
+                                        Just endIndex = V.findIndex (==currentPos) currentPath
+                                        vPath = V.fromList extensionPath
+                                        gain = V.length vPath - (endIndex - i + 1)
+                                    return (gain, vPath)
                                 else do
                                     MA.writeArray currentVisited currentPos 3
                                     let
-                                        foldfn oldPath nextPos = do
-                                            newPath <- go (nextPos: extensionPath) (wasOutside || status == 0)
-                                            if V.length oldPath < V.length newPath
-                                                then return newPath
-                                                else return oldPath
+                                        foldfn (oldGain, oldPath) nextPos = do
+                                            (newGain, newPath) <- go (nextPos: extensionPath) (wasOutside || status == 0)
+                                            if oldGain < newGain
+                                                then return (newGain, newPath)
+                                                else return (oldGain, oldPath)
                                         maxStatus = bool 1 2 wasOutside
                                     unVisitedStepOptions <- filterM (fmap (< maxStatus) <$> MA.readArray currentVisited) (validStepOptions tt currentPos)
-                                    pathToExtension <- foldM foldfn V.empty unVisitedStepOptions
+                                    pathToExtension <- foldM foldfn (-200, V.empty) unVisitedStepOptions
                                     MA.writeArray currentVisited currentPos 0
                                     return pathToExtension
                     go [currentPath V.! i] False
                 extendFrom startIndex currentPath = do
-                    extension <- findExtendFrom startIndex currentPath
+                    (_, extension) <- findExtendFrom startIndex currentPath
                     -- print ("ext", extension)
                     if null extension
                         then return Nothing
