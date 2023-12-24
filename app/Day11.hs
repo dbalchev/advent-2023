@@ -7,15 +7,7 @@ import qualified Data.Vector  as V
 import AocParser (readCharMap)
 import Control.Monad (guard)
 import Data.List (tails, sort)
-
-pairs list = do
-    t <- tails list
-    guard $ (not . null) t
-    let (x : xs) = t
-    map (x,) xs
-
--- >>> pairs "abcd"
--- [('a','b'),('a','c'),('a','d'),('b','c'),('b','d'),('c','d')]
+import Utils (pairs)
 
 boolToInt :: Bool -> Int
 boolToInt False = 0
