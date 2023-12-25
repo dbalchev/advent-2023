@@ -65,7 +65,7 @@ doesIntersect (testAreaStart, testAreaEnd) [[px1, py1, _], [vx1, vy1, _]] [[px2,
 computeScore hails parameterVector = sum $ map score hails
     where
         [rpx, rpy, rpz, rvx, rvy, rvz] = V.toList parameterVector
-        score [[px, py, pz], [vx, vy, vz]] = eq1 + eq2 + eq3 + if t < 0 then 1000 else 0
+        score [[px, py, pz], [vx, vy, vz]] = eq1 + eq2 + eq3 + if t < 0 then 100000 else 0
             where
                 eq1 = (rpx - px) * (rvy - vy) - (rpy - py) * (rvx - vx)
                 eq2 = (rpy - py) * (rvz - vz) - (rpz - pz) * (rvy - vy)
@@ -86,22 +86,21 @@ refine hails parameterVector (low, high) i
         Arg _ bestX = minimum [ Arg (abs $ score x) x | x <- [low..high], x /=0]
 
 
-refineN hails parameterVector bounds i n
-    | i == n = [parameterVector]
-    | i < n  = parameterVector : refineN hails (refine hails parameterVector bounds (i `mod` 6)) bounds (i + 1) n
+refineN hails parameterVector bounds i
+    = parameterVector : refineN hails (refine hails parameterVector bounds (i `mod` 6)) bounds (i + 1)
 
 solve testArea inputFilename = do
     hails <- fmap parseLine . T.lines <$> T.readFile inputFilename
     let
         r1 = sum $ map (bool 0 1 . uncurry (doesIntersect testArea)) $ pairs hails
         -- refined = computeScore hails $ V.fromList[24, 13, 10, -3, 1, 2]
-        initialParams = V.replicate 6 0
-        refined = drop 990 $ refineN hails initialParams (-1000, 1000) 0 1000
+        initialParams =  V.fromList[24, 13, 15, -3, 1, 2] --V.replicate 6 0
+        refined = take 10 $ drop 0 $ refineN hails initialParams (-1000, 1000) 0
 
-    return (r1, refined, computeScore hails $ head refined)
+    return (r1, refined, computeScore hails $ last refined)
 
 -- >>> solve (7,27) "inputs/sample/24.txt"
--- (2,[[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1],[-333,636,1,1,-1,-1]],-1)
+-- (2,[[24,13,15,-3,1,2],[20,13,15,-3,1,2],[20,16,15,-3,1,2],[20,16,15,-3,1,2],[20,16,15,-3,1,2],[20,16,15,-3,1,2],[20,16,15,-3,1,2],[21,16,15,-3,1,2],[21,16,15,-3,1,2],[21,16,15,-3,1,2]],0)
 
 -- >>> solve (200000000000000,400000000000000) "inputs/real/24.txt"
 -- 13754
