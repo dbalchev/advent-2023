@@ -29,14 +29,11 @@ parseInstruction instructionText
 -- >>> parseInstruction "cm-"
 -- Remove "cm"
 
-searchOp _ oldResult@(Just _) _ _   = oldResult
-searchOp isFound Nothing i inVector = bool Nothing (Just i) (isFound inVector)
-
-applyInstruction (Remove label) lens = maybe lens dropLens $ V.ifoldl' (searchOp ((==label) . fst)) Nothing lens
+applyInstruction (Remove label) lens = maybe lens dropLens $ V.findIndex ((==label) . fst) lens
     where
         dropLens lensIndex = V.take lensIndex lens V.++ V.drop (lensIndex + 1) lens
 
-applyInstruction (Set label focalLength) lens = maybe appended setLens $ V.ifoldl' (searchOp ((==label) . fst)) Nothing lens
+applyInstruction (Set label focalLength) lens = maybe appended setLens $ V.findIndex ((==label) . fst) lens
     where
         appended = V.snoc lens (label, focalLength)
         setLens lensIndex = lens V.// [(lensIndex, (label, focalLength))]
