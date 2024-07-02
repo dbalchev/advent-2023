@@ -29,14 +29,11 @@ parseInstruction instructionText
 -- >>> parseInstruction "cm-"
 -- Remove "cm"
 
-applyInstruction (Remove label) lens = maybe lens dropLens $ V.findIndex ((==label) . fst) lens
-    where
-        dropLens lensIndex = V.take lensIndex lens V.++ V.drop (lensIndex + 1) lens
 
-applyInstruction (Set label focalLength) lens = maybe appended setLens $ V.findIndex ((==label) . fst) lens
-    where
-        appended = V.snoc lens (label, focalLength)
-        setLens lensIndex = lens V.// [(lensIndex, (label, focalLength))]
+applyInstruction (Remove label) lens          = V.filter ((/=label) . fst) lens
+applyInstruction (Set label focalLength) lens = case V.findIndex ((==label) . fst) lens of
+    Nothing        -> V.snoc lens (label, focalLength)
+    Just lensIndex -> lens V.// [(lensIndex, (label, focalLength))]
 
 labelOf (Remove label) = label
 labelOf (Set label _)  = label
