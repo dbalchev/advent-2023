@@ -102,7 +102,7 @@ floodFill2 segments = runST $ do
         guard $ not (ni < minI || ni > maxI || nj < minJ || nj > maxJ)
         guard $ segments A.! (i, j) == segments A.! (ni, nj)
         return (ni, nj)
-    components :: [[(Int, Int)]] <- connectedComponents isVisited setVisited getAdj (A.indices segments)
+    components :: [V.Vector (Int, Int)] <- connectedComponents isVisited setVisited getAdj (A.indices segments)
     let isBoundaryPoint (i, j) = i == minI || i == maxI || j == minJ || j == maxJ
     let isTrench point = segments A.! point == 1
     let isValid component = not (null component || any ((&&) <$> isBoundaryPoint <*> (not . isTrench)) component)
