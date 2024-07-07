@@ -1,16 +1,27 @@
+{-# LANGUAGE DoAndIfThenElse     #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Day18 where
-import           Control.Monad             (forM, forM_, guard, replicateM_)
+import           Control.Monad             (forM, forM_, guard, replicateM_,
+                                            unless, when)
+import           Control.Monad.ST          (ST, runST)
 import           Control.Monad.Trans.Class (MonadTrans (lift))
-import           Control.Monad.Trans.State (StateT (runStateT), get, put)
+import           Control.Monad.Trans.State (StateT (runStateT), execStateT, get,
+                                            modify, put)
+import qualified Data.Array                as A
+import           Data.Array.Base           (IArray (bounds),
+                                            STUArray (STUArray), assocs)
 import           Data.Array.IO.Internals   (IOUArray (IOUArray))
 import qualified Data.Array.MArray         as MA
 import           Data.Bool                 (bool)
+import           Data.Foldable             (Foldable (fold), for_, traverse_)
+import           Data.List
+import           Data.Monoid               (First (First))
 import qualified Data.Text                 as T
 import qualified Data.Text.IO              as T
 import qualified Data.Text.Read            as T
 import qualified Data.Vector               as V
+import           Debug.Trace               (traceM, traceShowM)
 
 parseLine :: T.Text -> (Char, Int, T.Text)
 parseLine line = (T.head direction, (read . T.unpack) nSteps, (T.drop 2 . T.dropEnd 1) color)
@@ -22,6 +33,7 @@ getDir 'D' = (1, 0)
 getDir 'L' = (0, -1)
 getDir 'R' = (0, 1)
 
+floodFill :: (Num b, Eq a2, MA.MArray a1 a2 IO, Num a2) => a1 (Int, Int) a2 -> IO b
 floodFill segments = do
     ((minI, minJ), (maxI, maxJ)) <- MA.getBounds segments
     indices <- fmap fst <$> MA.getAssocs segments
@@ -53,7 +65,53 @@ floodFill segments = do
     -- forM_ [minI..maxI] $ \i -> do
     --     elements <- forM [minJ..maxJ] $ \j -> MA.readArray segments (i, j)
     --     print elements
-    sum <$> forM indices (fmap (bool 1 0.(`elem` outColors)) . MA.readArray segments)
+    sum <$> forM indices (fmap (bool 1 0 . (`elem` outColors)) . MA.readArray segments)
+
+
+dfsSubgraph isVisited setVisited getAdj currentPoint = do
+    currentPointIsVisited <- isVisited currentPoint
+    -- traceShowM ("dfsSubgraph", currentPoint, currentPointIsVisited)
+    if currentPointIsVisited then
+        return mempty
+    else do
+        setVisited currentPoint
+        adjPoints <- getAdj currentPoint
+        (pure currentPoint <>) . fold <$> traverse (dfsSubgraph isVisited setVisited getAdj) adjPoints
+
+dfsSubgraphTest :: [Int]
+dfsSubgraphTest = runST $ do
+     visited  <- MA.newArray (0, 3) False :: ST s (STUArray s Int Bool)
+     let getAdj = return <$> ([[1, 2], [3], [0, 1, 3], []] !!)
+     dfsSubgraph (MA.readArray visited) (flip (MA.writeArray visited) True) getAdj 0
+
+-- >>> dfsSubgraphTest
+-- [0,1,3,2]
+
+connectedComponents isVisited setVisited getAdj vertices = forM vertices (dfsSubgraph isVisited setVisited getAdj)
+
+floodFill2 segments = runST $ do
+    let bounds@((minI, minJ), (maxI, maxJ)) = A.bounds segments
+    visited <- MA.newArray bounds False :: ST s (STUArray s (Int, Int) Bool)
+    let isVisited = MA.readArray visited
+    let setVisited = flip (MA.writeArray visited) True
+
+    let getAdj (i, j) = return $ do
+        (di, dj) <- [(-1, 0), (1, 0), (0, 1), (0, -1)]
+        let ni = i + di
+        let nj = j + dj
+        guard $ not (ni < minI || ni > maxI || nj < minJ || nj > maxJ)
+        guard $ segments A.! (i, j) == segments A.! (ni, nj)
+        return (ni, nj)
+    components :: [[(Int, Int)]] <- connectedComponents isVisited setVisited getAdj (A.indices segments)
+    let isBoundaryPoint (i, j) = i == minI || i == maxI || j == minJ || j == maxJ
+    let isTrench point = segments A.! point == 1
+    let isValid component = not (null component || any ((&&) <$> isBoundaryPoint <*> (not . isTrench)) component)
+    let validComponentLengths = map length $ filter isValid components
+    traceShowM validComponentLengths
+    return (sum validComponentLengths)
+
+
+
 
 decodePart2 (_, _, h) = (decodeDir $ T.last h, number)
     where
@@ -92,7 +150,7 @@ solve inputFilename = do
                 put (i + di, j + dj)
             (i, j) <- get
             lift $ MA.writeArray segments (i, j) 1
-    solution1 :: Int <- floodFill segments
+    solution1 :: Int <- floodFill2 <$> MA.freeze segments
     let decoded = V.map decodePart2 plan
     let
         nextV (i, j) (dir, nSteps) = (i + di * nSteps, j + dj * nSteps)
