@@ -39,6 +39,7 @@ common requires
         array ^>= 0.5.4.0,
         hashable ^>= 1.4.3.0,
         fingertree ^>= 0.1.5.0,
+        hashmap ^>= 1.3.3,
     
 library advent2023-lib
     import: requires
